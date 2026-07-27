@@ -63,7 +63,7 @@ class ToolDispatcher:
             
             # Execute the local python function
             result = self.tools[tool_name](**arguments)
-            return self._format_response(tool_name, "success", result)
+            return self._format_response(tool_name, "success", result, arguments)
             
         except json.JSONDecodeError:
             error_msg = "Invalid JSON tool call provided by the model."
@@ -72,17 +72,51 @@ class ToolDispatcher:
         except Exception as e:
             error_msg = f"Tool execution failed: {str(e)}"
             logger.error(error_msg)
-            return self._format_response(call_data.get("name", "unknown"), "error", error_msg)
+            return self._format_response(call_data.get("name", "unknown"), "error", {"error": error_msg})
 
-    def _format_response(self, tool_name: str, status: str, data: Any) -> str:
-        """Formats the result into a clean JSON string with timestamp logging."""
-        response = {
-            "tool": tool_name,
-            "status": status,
-            "timestamp": datetime.now().isoformat(),
-            "result": data
-        }
-        return json.dumps(response, indent=2)
+    def _format_response(self, tool_name: str, status: str, data: Any, arguments: dict = None) -> str:
+        """Formats the result into a styled HTML card with status icons and JSON fallback."""
+        if status == "error":
+            icon, title, color = "🔴", "ERROR", "#EF4444"
+            desc = data.get("error", "Unknown error")
+            
+        elif tool_name == "parse_prescription_label":
+            icon, title, color = "🟢", "SUCCESS", "#10B981"
+            med = data.get("data", {}).get("medication_name", "Unknown")
+            dos = data.get("data", {}).get("dosage", "")
+            desc = f"Extracted: {med} {dos}."
+            
+        elif tool_name == "trigger_haptic_feedback":
+            icon, title, color = "🟡", "HAPTIC PULSE", "#F59E0B"
+            pat = arguments.get("pattern", "Unknown") if arguments else "Unknown"
+            desc = f"Signal Sent: {pat.capitalize()} (Vibration)."
+            
+        elif tool_name == "verify_medication_expiry":
+            if data.get("is_safe"):
+                icon, title, color = "🟢", "SAFETY CHECK", "#10B981"
+            else:
+                icon, title, color = "🔴", "SAFETY WARNING", "#EF4444"
+            desc = data.get("warning", "")
+            
+        else:
+            icon, title, color = "⚪", "INFO", "#94A3B8"
+            desc = str(data)
+
+        # Build an HTML card
+        html = f'''
+        <div style="background-color: #080C14; border-left: 4px solid {color}; padding: 12px; margin-top: 8px; border-radius: 4px; font-family: monospace;">
+            <div style="color: {color}; font-weight: bold; margin-bottom: 4px;">
+                {icon} {title}: {tool_name}()
+            </div>
+            <div style="color: #E2E8F0; padding-left: 24px;">
+                &rarr; {desc}
+            </div>
+            <div style="color: #475569; font-size: 0.8em; padding-left: 24px; margin-top: 4px;">
+                [RAW JSON] {json.dumps(data)}
+            </div>
+        </div>
+        '''
+        return html
 
     # --- Tool Implementations ---
     

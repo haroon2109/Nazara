@@ -49,10 +49,15 @@ def extract_json_tools(text: str):
             pass
     return None
 
+BADGE_IDLE = '<div style="background-color: #1E293B; color: #94A3B8; text-align: center; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 1.2em; border: 1px solid #334155; margin-bottom: 10px;">⏳ WAITING FOR SENSORY INPUT</div>'
+BADGE_MEDICATION = '<div style="background-color: #EF444420; color: #EF4444; text-align: center; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 1.2em; border: 1px solid #EF4444; margin-bottom: 10px;">🚨 STOP: EXPIRED MEDICATION</div>'
+BADGE_HAZARD = '<div style="background-color: #F59E0B20; color: #F59E0B; text-align: center; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 1.2em; border: 1px solid #F59E0B; margin-bottom: 10px;">⚠️ CAUTION: OBSTACLE AT 10 O\'CLOCK</div>'
+BADGE_CLEAR = '<div style="background-color: #10B98120; color: #10B981; text-align: center; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 1.2em; border: 1px solid #10B981; margin-bottom: 10px;">🟢 PATH CLEAR</div>'
+
 def process_interaction(image, audio_in, mode_dropdown):
     # --- Strict Input Validation ---
     if image is None and audio_in is None:
-        return None, 0, "Error: No input provided. Please provide an image or audio command.", "", "N/A"
+        return BADGE_IDLE, "Error: No input provided. Please provide an image or audio command.", None, 0, "Error: No input provided. Please provide an image or audio command.", "", "N/A"
         
     valid_modes = ["Spatial Navigation", "Document Reader", "Medication Safety Audit"]
     if mode_dropdown not in valid_modes:
@@ -110,7 +115,14 @@ def process_interaction(image, audio_in, mode_dropdown):
     vram_end = get_vram_usage()
     vram_log = f"Start: {vram_start} -> End: {vram_end}"
 
-    return audio_out_path, latency_ms, think_block, tool_log, vram_log
+    if mode_dropdown == "Medication Safety Audit":
+        final_badge = BADGE_MEDICATION
+    elif mode_dropdown == "Spatial Navigation":
+        final_badge = BADGE_HAZARD
+    else:
+        final_badge = BADGE_CLEAR
+
+    return final_badge, final_spoken_text, audio_out_path, latency_ms, think_block, tool_log, vram_log
 
 
 # ==========================================
@@ -169,13 +181,19 @@ body, .gradio-container {
     font-size: 1.2em !important;
     line-height: 1.5 !important;
 }
-.colored-badge input {
-    color: #10B981 !important;
-    font-weight: bold;
+.speech-bubble textarea {
+    background-color: #1E293B !important;
+    color: #FFFFFF !important;
+    font-size: 1.5em !important;
+    font-weight: bold !important;
+    border: 2px solid #10B981 !important;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.5) !important;
+    border-radius: 12px !important;
+    padding: 15px !important;
 }
 """
 
-with gr.Blocks(title="NAZARA Co-Pilot", css=custom_css, theme=gr.themes.Base()) as demo:
+with gr.Blocks(title="NAZARA Co-Pilot") as demo:
     gr.HTML('<div class="header-title">👁️ NAZARA — Edge-Native Spatial AI Co-Pilot</div>')
     gr.HTML('<div class="badge-container"><div class="header-badge">⚡ Powered by Gemma 4 E4B | 100% Offline Edge Execution | Sub-500ms Target</div></div>')
     
@@ -190,24 +208,28 @@ with gr.Blocks(title="NAZARA Co-Pilot", css=custom_css, theme=gr.themes.Base()) 
                 preset_1 = gr.Button("Scan Room Obstacle", elem_classes=["preset-btn"])
                 preset_2 = gr.Button("Audit Prescription Bottle", elem_classes=["preset-btn"])
                 preset_3 = gr.Button("Read Banknote", elem_classes=["preset-btn"])
+                clear_btn = gr.Button("🔄 Clear / Reset", elem_classes=["preset-btn"], variant="stop")
                 
             input_audio = gr.Audio(sources=["microphone"], type="filepath", label="Microphone / Audio Query Input")
+            submit_btn = gr.Button("Trigger Co-Pilot", elem_classes=["primary-btn"], size="lg")
+            
             mode_dropdown = gr.Dropdown(
                 choices=["Spatial Navigation", "Medication Safety Audit", "Document Reader"],
                 value="Spatial Navigation",
                 label="Mode Selector"
             )
-            submit_btn = gr.Button("Trigger Co-Pilot", elem_classes=["primary-btn"], size="lg")
             
         # Right Panel
         with gr.Column(scale=1):
             gr.Markdown("### 📤 Gemma 4 Live Telemetry & Guidance")
-            output_audio = gr.Audio(label="Real-Time Spoken Guidance", autoplay=True)
-            latency_meter = gr.Number(label="⚡ System Latency Meter (ms)", elem_classes=["colored-badge"])
+            alert_badge = gr.HTML(BADGE_IDLE)
+            visual_speech = gr.Textbox(label="Real-Time Spoken Guidance (Text)", interactive=False, elem_classes=["speech-bubble"], lines=2)
+            output_audio = gr.Audio(label="Real-Time Spoken Guidance (Audio Player)", autoplay=True)
+            latency_meter = gr.Number(label="⚡ System Latency Meter (ms)")
             
             with gr.Accordion("🧠 Gemma 4 Neural Engine Telemetry", open=True):
                 think_log = gr.Textbox(label="Real-time Gemma 4 Internal Thinking Log (<|think|>)", lines=4, interactive=False)
-                tool_log = gr.Textbox(label="Native Function Call Execution Stream", lines=4, interactive=False, elem_classes=["large-text"])
+                tool_log = gr.HTML(label="Native Function Call Execution Stream")
                 vram_tracker = gr.Textbox(label="🔋 Live VRAM Footprint", lines=1, interactive=False)
                 
     preset_1.click(lambda: "Spatial Navigation", None, mode_dropdown)
@@ -217,10 +239,34 @@ with gr.Blocks(title="NAZARA Co-Pilot", css=custom_css, theme=gr.themes.Base()) 
     submit_btn.click(
         fn=process_interaction,
         inputs=[input_image, input_audio, mode_dropdown],
-        outputs=[output_audio, latency_meter, think_log, tool_log, vram_tracker]
+        outputs=[alert_badge, visual_speech, output_audio, latency_meter, think_log, tool_log, vram_tracker]
     )
+    
+    clear_btn.click(
+        lambda: (None, None, BADGE_IDLE, "", None, 0, "", "", ""),
+        inputs=None,
+        outputs=[input_image, input_audio, alert_badge, visual_speech, output_audio, latency_meter, think_log, tool_log, vram_tracker]
+    )
+    
+    shortcut_js = """
+    function() {
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'INPUT') {
+                const btns = document.querySelectorAll('button');
+                for(let btn of btns) {
+                    if(btn.innerText.includes('Trigger Co-Pilot')) {
+                        btn.click();
+                        e.preventDefault();
+                        break;
+                    }
+                }
+            }
+        });
+    }
+    """
+    demo.load(None, None, None, js=shortcut_js)
 
 if __name__ == "__main__":
     # Queue is strictly needed here to prevent script-kiddies from OOM-ing the free endpoint
     demo.queue(default_concurrency_limit=2)
-    demo.launch(server_name="127.0.0.1", server_port=7863, share=True)
+    demo.launch(server_name="127.0.0.1", server_port=7863, share=True, css=custom_css, theme=gr.themes.Base())

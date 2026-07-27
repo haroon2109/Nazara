@@ -28,14 +28,24 @@ class NazaraEngine:
         # BitsAndBytesConfig setup for memory efficiency (T4/P100 target)
         bnb_config = BitsAndBytesConfig(**config.QUANTIZATION)
         
-        # Load the model directly
-        self.model = AutoModelForCausalLM.from_pretrained(
-            config.MODEL_ID,
-            device_map=config.DEVICE_MAP,
-            quantization_config=bnb_config,
-            low_cpu_mem_usage=True
-        )
-        logger.info("NAZARA Engine initialized successfully.")
+        try:
+            # Load the model directly using 4-bit
+            self.model = AutoModelForCausalLM.from_pretrained(
+                config.MODEL_ID,
+                device_map=config.DEVICE_MAP,
+                quantization_config=bnb_config,
+                low_cpu_mem_usage=True
+            )
+            logger.info("NAZARA Engine initialized successfully with 4-bit quantization.")
+        except Exception as e:
+            logger.warning(f"4-bit quantization failed: {e}. Falling back to float16 with device_map='auto'...")
+            self.model = AutoModelForCausalLM.from_pretrained(
+                config.MODEL_ID,
+                device_map="auto",
+                torch_dtype=torch.float16,
+                low_cpu_mem_usage=True
+            )
+            logger.info("NAZARA Engine initialized successfully via float16 fallback.")
 
     def process_frame(self, image_input, audio_input=None, text_prompt=None, max_visual_tokens=256):
         # Default prompt if UI somehow sends an empty query

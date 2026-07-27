@@ -46,11 +46,11 @@ def create_kaggle_notebook():
                  "This notebook packages the complete NAZARA pipeline into a single runnable instance. "
                  "Run the cells sequentially. The final cell will generate a public Gradio link you can open on your smartphone.")
 
-    # Requirements
+    # Requirements (First cell ensures packages load before subsequent imports)
     add_markdown("### 1. Environment Setup\n"
                  "Install all strict dependencies (Transformers, BitsAndBytes, Edge-TTS, Gradio).")
     reqs = read_file("requirements.txt").replace('\n', ' ')
-    add_code(f"!pip install {reqs}")
+    add_code(f"!pip install {reqs}\nimport time\ntime.sleep(2)")
 
     # Config
     add_markdown("### 2. Configuration (`config.py`)")

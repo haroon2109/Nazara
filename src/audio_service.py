@@ -88,7 +88,12 @@ class AsyncAudioEngine:
 
         if EDGE_TTS_AVAILABLE:
             logger.info(f"Using edge-tts to generate audio: {output_path}")
-            asyncio.run(self._generate_edge_tts(clean_text, output_path))
+            try:
+                asyncio.run(self._generate_edge_tts(clean_text, output_path))
+            except Exception as e:
+                logger.warning(f"edge-tts failed (possibly network timeout): {e}. Falling back to gTTS.")
+                tts = gTTS(text=clean_text, lang='en', lang_check=False)
+                tts.save(output_path)
         else:
             logger.info(f"edge-tts unavailable, using gTTS fallback to generate: {output_path}")
             tts = gTTS(text=clean_text, lang='en', lang_check=False)
